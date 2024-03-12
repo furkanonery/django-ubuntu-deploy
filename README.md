@@ -357,6 +357,92 @@
     sudo systemctl restart gunicorn
     ```
 
+    ### Asenkron Çalışan İşler İçin Celery Servisi Oluşturmak
+
+* Celery'nin hizmet verebildiğinden emin olmak için uygulamamızın kök dizinine gidip aşağıdaki kodu yazıyoruz:
+  
+    ```
+    celery -A core worker
+    ```
+
+    Eğer çalışıyorsa CTRL+C diyip servisi'i durduralım.
+
+    ### Celery için systemd Soket ve Servis Dosyaları Oluşturma
+
+* İlk önce Celery için sudo ayrıcalıklarına sahip bir systemd soket dosyası oluşturularım:
+
+    ```
+    sudo nano /etc/systemd/system/celery.socket
+    ```
+
+    Aşağıdaki satırları bu dosyaya ekliyoruz:
+    ```
+    [Unit]
+    Description=celery socket
+
+    [Socket]
+    ListenStream=/run/celery.sock
+
+    [Install]
+    WantedBy=sockets.target
+    ```
+
+* Ardından, metin düzenleyicimizde Celery için sudo ayrıcalıklarına sahip bir systemd hizmet dosyası oluşturup açalım. Gunicorn'da da bahsettiğimiz gibi service dosya adı, uzantı dışında soket dosya adıyla eşleşmelidir:
+
+    ```
+    sudo nano /etc/systemd/system/celery.service
+    ```
+
+    ```
+    [Unit]
+    Description=Celery Worker Daemon
+    Requires=gunicorn.socket
+    After=network.target
+
+    [Service]
+    User=username
+    Group=www-data
+    WorkingDirectory=/home/username/sample/sample-project-backend/backend
+    ExecStart=/home/username/sample/venv/bin/celery -A core worker --loglevel=info
+
+    [Install]
+    WantedBy=multi-user.target
+
+    ```
+
+    Artık Celery soketini başlatabilir ve etkinleştirebiliriz. Bu, soket dosyasını şimdi /run/celery.sock konumunda ve açılışta oluşturacaktır.
+
+    ```
+    sudo systemctl start celery.socket
+    ```
+    ```
+    sudo systemctl enable celery.socket
+    ```
+
+    Başlatılıp başlatılamayacağını öğrenmek için işlemin durumunu kontrol edelim:
+
+    ```
+    sudo systemctl status celery.socket
+    ```
+
+    Daha sonra, /run dizini içinde celery.sock dosyasının varlığını kontrol edin:
+
+    ```
+    file /run/celery.sock
+    ```
+
+    Systemctl status komutu bir hata oluştuğunu belirtiyorsa veya celery.sock dosyasını dizinde bulamıyorsanız, bu celery soketinin doğru şekilde oluşturulamadığının bir göstergesidir. Celery soketinin günlüklerini şunu yazarak kontrol edin:
+
+    ```
+    sudo journalctl -u celery.socket
+    ```
+
+    Şu anda celery.socket ünitesini yeni başlattıysanız, celery.service henüz aktif olmayacaktır çünkü soket henüz herhangi bir bağlantı almamıştır. Bunu yazarak kontrol edebilirsiniz:
+
+    ```
+    sudo systemctl status celery
+    ```
+
     ### Nginx'i Gunicorn'a Proxy Pass ile yönlendirmek
 
     Artık Gunicorn kurulduğuna göre, Nginx'i sürece trafik aktaracak şekilde yapılandırmamız gerekiyor.
